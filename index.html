@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>人狼</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f121b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="人狼">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+
+<style>
+  :root{
+    --ink:#0f121b; --ink2:#161b27; --panel:#1d2432; --line:#2d3548;
+    --lamp:#e8c27a; --lampDim:#7d6a45; --blood:#b03a42;
+    --paper:#efe9dc; --mist:#98a1b6; --moss:#6f9b7a;
+    --mincho:"Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP",serif;
+    --sans:"Hiragino Sans","Yu Gothic UI","Yu Gothic","Noto Sans JP",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--ink); color:var(--paper); font-family:var(--sans);
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+    overscroll-behavior:none; -webkit-text-size-adjust:100%;
+  }
+  #app{
+    max-width:480px; margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 48px);
+  }
+  h2{font-family:var(--mincho); font-size:22px; font-weight:600; letter-spacing:.02em}
+  .sub{color:var(--mist); font-size:13px; margin-top:4px; line-height:1.6}
+  .head{margin-bottom:20px}
+  .stack>*+*{margin-top:8px}
+  .mt24{margin-top:24px} .mb24{margin-bottom:24px} .mb32{margin-bottom:32px}
+
+  button{font-family:inherit; font-size:16px; border:none; background:none; color:inherit}
+  .btn{
+    display:block; width:100%; padding:16px 20px; border-radius:10px;
+    font-weight:600; background:var(--lamp); color:var(--ink);
+  }
+  .btn:disabled{opacity:.32}
+  .btn.blood{background:var(--blood); color:var(--paper)}
+  .btn.ghost{background:transparent; color:var(--mist); border:1px solid var(--line)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+
+  .choice{
+    display:block; width:100%; text-align:left; padding:16px;
+    border-radius:10px; background:var(--panel); border:1px solid var(--line);
+    color:var(--paper); font-weight:600;
+  }
+  .choice.on{background:var(--pick,var(--lamp)); border-color:var(--pick,var(--lamp)); color:var(--ink)}
+  .choice small{display:block; font-weight:400; font-size:11px; opacity:.75; margin-top:4px}
+  .choice:disabled{opacity:.4}
+
+  .row{
+    display:flex; align-items:center; gap:12px; padding:12px 16px;
+    border-radius:10px; background:var(--panel); border:1px solid var(--line);
+    font-size:14px;
+  }
+  .row .grow{flex:1}
+  .mark{
+    width:32px; height:32px; flex:none; border-radius:6px; color:var(--ink);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mincho);
+  }
+  .step{width:36px; height:36px; border-radius:6px; background:var(--ink2); color:var(--paper); font-size:18px}
+  .num{width:24px; text-align:center; font-size:18px}
+  .pill{padding:5px 12px; border-radius:6px; font-size:12px; font-weight:600; background:var(--ink2); color:var(--mist)}
+  .pill.on{background:var(--lamp); color:var(--ink)}
+
+  input{
+    width:100%; padding:14px 16px; border-radius:10px; font-size:16px;
+    background:var(--panel); border:1px solid var(--line); color:var(--paper);
+    -webkit-user-select:text; user-select:text;
+  }
+  input:focus{outline:none; border-color:var(--lampDim)}
+
+  .center{text-align:center}
+  .box{background:var(--ink2); border:1px solid var(--line); border-radius:12px; padding:28px}
+  .hold{
+    min-height:260px; display:flex; align-items:center; justify-content:center;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:24px; touch-action:none; text-align:center;
+  }
+  .hold.held{background:var(--ink2); border-color:var(--lampDim)}
+  .hold .face{display:none} .hold.held .face{display:block}
+  .hold.held .seal{display:none}
+  .big{font-family:var(--mincho); font-size:52px; line-height:1.1}
+  .huge{font-family:var(--mincho); font-size:64px; line-height:1.1}
+  .clock{font-family:var(--mincho); font-size:64px; font-variant-numeric:tabular-nums}
+  .logline{font-size:13px; color:var(--mist); line-height:1.8}
+  .tag{display:inline-block; padding:8px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line); font-size:14px; margin:0 6px 6px 0}
+  .dead{color:var(--mist); text-decoration:line-through}
+  .warn{background:var(--ink2); border:1px solid var(--line); border-radius:10px; padding:14px 16px; font-size:13px; color:var(--blood); line-height:1.6}
+  .spacer{height:40px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ------------------------------------------------------------------ */
+/*  定義                                                                */
+/* ------------------------------------------------------------------ */
+const ROLES = {
+  wolf:     {name:"人狼",     mark:"狼", accent:"#b03a42",
+             line:"毎晩ひとりを襲う。占われれば「人狼」と出る。",
+             win:"生き残った人狼の数が、人狼以外の数と並べば勝ち。"},
+  traitor:  {name:"裏切り者", mark:"裏", accent:"#c2708a",
+             line:"夜にできることはない。占われても「人間」と出る。",
+             win:"人狼が勝てばあなたの勝ち。人狼が誰かは知らされない。"},
+  knight:   {name:"騎士",     mark:"守", accent:"#7391c4",
+             line:"毎晩ひとりを守る。守った人はその夜襲われない。自分は守れない。",
+             win:"人狼を全員処刑すれば勝ち。"},
+  seer:     {name:"預言者",   mark:"占", accent:"#a98fd0",
+             line:"毎晩ひとりを占い、人狼かどうかを知る。",
+             win:"人狼を全員処刑すれば勝ち。"},
+  villager: {name:"村人",     mark:"村", accent:"#e8c27a",
+             line:"力はない。話と投票だけが武器。",
+             win:"人狼を全員処刑すれば勝ち。"},
+};
+const KEYS = ["wolf","traitor","knight","seer","villager"];
+const PRESETS = {
+  4:{wolf:1,traitor:0,knight:1,seer:1,villager:1},
+  5:{wolf:1,traitor:1,knight:1,seer:1,villager:1},
+  6:{wolf:1,traitor:1,knight:1,seer:1,villager:2},
+  7:{wolf:2,traitor:1,knight:1,seer:1,villager:2},
+  8:{wolf:2,traitor:1,knight:1,seer:1,villager:3},
+};
+
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const shuffle = a => { a=[...a];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a; };
+
+/* ------------------------------------------------------------------ */
+/*  状態                                                                */
+/* ------------------------------------------------------------------ */
+const fresh = () => ({
+  phase:"setup", count:5, names:["","","","",""], comp:{...PRESETS[5]},
+  rules:{firstSeer:true, noRepeatGuard:true, revealExecuted:false, tie:"random", talkSec:180},
+  players:[], day:0, log:[], cursor:0, stage:"handoff", pick:null,
+  night:{wolf:null, guard:null, seer:null}, seerOut:null, seerLog:[],
+  lastGuard:null, votes:{}, voteInfo:null, morningInfo:null, winner:null,
+  left:180, running:false,
+});
+let S = fresh();
+
+const KEY = "jinrou.v1";
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const o = JSON.parse(raw); if(o && o.phase){ S = Object.assign(fresh(), o); S.running=false; } }
+  }catch(e){}
+}
+
+const alive = () => S.players.filter(p=>p.alive);
+const compTotal = () => KEYS.reduce((s,k)=>s+S.comp[k],0);
+const addLog = t => S.log.push(t);
+const checkWin = ps => {
+  const a = ps.filter(p=>p.alive);
+  const w = a.filter(p=>p.role==="wolf").length;
+  if(w===0) return "village";
+  if(w >= a.length - w) return "wolf";
+  return null;
+};
+
+/* ------------------------------------------------------------------ */
+/*  部品                                                                */
+/* ------------------------------------------------------------------ */
+const head = (t,s) => `<div class="head"><h2>${t}</h2>${s?`<div class="sub">${s}</div>`:""}</div>`;
+const btn  = (label,act,{tone="",disabled=false,arg=""}={}) =>
+  `<button class="btn ${tone}" data-act="${act}" data-arg="${esc(arg)}" ${disabled?"disabled":""}>${label}</button>`;
+const choice = (label,id,sel,accent,sub,disabled) =>
+  `<button class="choice ${sel?"on":""}" style="--pick:${accent||"var(--lamp)"}" data-act="pick" data-arg="${id}" ${disabled?"disabled":""}>${esc(label)}${sub?`<small>${sub}</small>`:""}</button>`;
+const handoff = (name,note,act) => `
+  <div class="center" style="padding:48px 0">
+    <div class="sub">端末を次の人へ</div>
+    <div class="big" style="margin-top:16px">${esc(name)}</div>
+    ${note?`<div class="sub" style="margin-top:16px">${note}</div>`:""}
+    <div style="height:40px"></div>
+    ${btn("わたしは"+esc(name)+"です", act)}
+  </div>`;
+const holdCard = inner => `
+  <div class="hold">
+    <div class="seal">
+      <div class="big" style="color:var(--lampDim)">封</div>
+      <div class="sub" style="margin-top:12px">長押ししている間だけ見えます</div>
+    </div>
+    <div class="face">${inner}</div>
+  </div>`;
+
+/* ------------------------------------------------------------------ */
+/*  画面                                                                */
+/* ------------------------------------------------------------------ */
+function view(){
+  const P = S.phase;
+  if(P==="setup")      return vSetup();
+  if(P==="reveal")     return vReveal();
+  if(P==="day")        return vDay();
+  if(P==="vote")       return vVote();
+  if(P==="voteResult") return vVoteResult();
+  if(P==="night")      return vNight();
+  if(P==="morning")    return vMorning();
+  if(P==="over")       return vOver();
+  return "";
+}
+
+function vSetup(){
+  const n = S.count, t = compTotal();
+  const ok = t===n && S.comp.wolf>=1 && S.comp.wolf < n - S.comp.wolf;
+  const err = t!==n ? `役の合計が ${t} 人。${n} 人に合わせてください。`
+            : S.comp.wolf<1 ? "人狼が０人では始まりません。"
+            : "人狼が多すぎて、初日に村人陣営が負けています。";
+  return `
+  <div class="center" style="padding:28px 0 36px">
+    <div class="huge" style="letter-spacing:.15em">人狼</div>
+    <div class="sub" style="margin-top:12px">端末をひとつ、輪になって回す</div>
+  </div>
+
+  ${head("人数","人数を変えると構成が既定値に戻ります")}
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:32px">
+    ${[4,5,6,7,8].map(k=>`<button class="choice ${S.count===k?"on":""}" style="text-align:center;padding:14px 0" data-act="count" data-arg="${k}">${k}</button>`).join("")}
+  </div>
+
+  ${head("役の配分",`合計 ${t} / ${n} 人`)}
+  <div class="stack">
+    ${KEYS.map(k=>`
+      <div class="row">
+        <span class="mark" style="background:${ROLES[k].accent}">${ROLES[k].mark}</span>
+        <span class="grow">${ROLES[k].name}</span>
+        <button class="step" data-act="comp" data-arg="${k}:-1">−</button>
+        <span class="num">${S.comp[k]}</span>
+        <button class="step" data-act="comp" data-arg="${k}:1">＋</button>
+      </div>`).join("")}
+  </div>
+  <div class="sub mb32" style="margin-top:8px">
+    人狼陣営 ${S.comp.wolf+S.comp.traitor} ／ 村人陣営 ${S.comp.knight+S.comp.seer+S.comp.villager}
+    （裏切り者は人数計算では村側に数えます）
+  </div>
+
+  ${head("名前")}
+  <div class="stack mb32">
+    ${Array.from({length:n},(_,i)=>
+      `<input data-name="${i}" value="${esc(S.names[i]||"")}" placeholder="プレイヤー${i+1}" autocomplete="off">`).join("")}
+  </div>
+
+  ${head("ルール")}
+  <div class="stack mb32">
+    ${[["firstSeer","初日に預言者が１回占う"],["noRepeatGuard","騎士の連続護衛を禁止する"],["revealExecuted","処刑された人の役を公開する"]]
+      .map(([k,l])=>`
+      <button class="row" style="width:100%;text-align:left" data-act="rule" data-arg="${k}">
+        <span class="grow">${l}</span>
+        <span class="pill ${S.rules[k]?"on":""}">${S.rules[k]?"する":"しない"}</span>
+      </button>`).join("")}
+    <div class="row">
+      <span class="grow">票が並んだとき</span>
+      <button class="pill on" data-act="tie">${S.rules.tie==="random"?"くじ引き":"処刑なし"}</button>
+    </div>
+    <div class="row">
+      <span class="grow">話し合いの時間</span>
+      <button class="step" data-act="talk" data-arg="-60">−</button>
+      <span class="num" style="width:48px">${S.rules.talkSec/60}分</span>
+      <button class="step" data-act="talk" data-arg="60">＋</button>
+    </div>
+  </div>
+
+  ${ok?"":`<div class="warn mb24">${err}</div>`}
+  ${btn("役を配る","start",{disabled:!ok})}`;
+}
+
+function vReveal(){
+  const p = S.players[S.cursor], r = ROLES[p.role];
+  if(S.stage==="handoff") return handoff(p.name,"ほかの人に見えない向きで持ってください","ready");
+
+  if(S.stage==="role"){
+    const mates = p.role==="wolf" ? S.players.filter(x=>x.id!==p.id && x.role==="wolf") : [];
+    return head("あなたの役",`${S.cursor+1} / ${S.players.length} 人目`) + holdCard(`
+      <div class="big" style="color:${r.accent}">${r.name}</div>
+      <div style="margin-top:20px;font-size:14px;line-height:1.7">${r.line}</div>
+      <div class="sub" style="margin-top:10px">${r.win}</div>
+      ${mates.length?`<div style="margin-top:16px;font-size:14px;color:var(--blood)">仲間の人狼：${mates.map(m=>esc(m.name)).join("、")}</div>`:""}
+    `) + `<div class="mt24">${btn("覚えた","roleDone")}</div>`;
+  }
+
+  if(S.stage==="seerPick"){
+    return head("初日の占い","結果はあなたにだけ表示されます") +
+      `<div class="stack">${S.players.filter(x=>x.id!==p.id)
+        .map(x=>choice(x.name,x.id,S.pick===x.id,ROLES.seer.accent)).join("")}</div>` +
+      `<div class="mt24">${btn("占う","divine",{disabled:S.pick===null})}</div>`;
+  }
+
+  if(S.stage==="seerResult") return seerResultView("revealNext");
+}
+
+function seerResultView(act){
+  const o = S.seerOut;
+  return head("占いの結果") + holdCard(`
+    <div class="sub">${esc(o.name)} は</div>
+    <div class="huge" style="margin-top:12px;color:${o.res==="人狼"?"var(--blood)":"var(--moss)"}">${o.res}</div>
+  `) + `<div class="mt24">${btn("覚えた",act)}</div>`;
+}
+
+function vDay(){
+  const mm = String(Math.floor(Math.max(0,S.left)/60)).padStart(2,"0");
+  const ss = String(Math.max(0,S.left)%60).padStart(2,"0");
+  return `
+  <div class="center" style="padding:24px 0 8px">
+    <div class="sub">${S.day}日目・話し合い</div>
+    <div class="clock" id="clock" style="margin-top:8px;color:${S.left<=30?"var(--blood)":"var(--paper)"}">${mm}:${ss}</div>
+  </div>
+  <div class="grid2 mb32" style="margin-top:24px">
+    ${btn(S.running?"止める":(S.left===S.rules.talkSec?"始める":"再開する"),"timer",{tone:"ghost"})}
+    ${btn("１分たす","plus60",{tone:"ghost"})}
+  </div>
+  ${head("生存者",`${alive().length}人`)}
+  <div class="mb32">${alive().map(p=>`<span class="tag">${esc(p.name)}</span>`).join("")}</div>
+  ${S.log.length?head("これまで")+`<div class="mb32">${S.log.map(l=>`<div class="logline">${esc(l)}</div>`).join("")}</div>`:""}
+  ${btn("投票に進む","toVote")}`;
+}
+
+function vVote(){
+  const a = alive(), p = a[S.cursor];
+  if(S.stage==="handoff") return handoff(p.name,"投票はひとりずつ、誰にも見せずに","ready");
+  return head("誰を処刑する？","自分には投票できません") +
+    `<div class="stack">${a.filter(x=>x.id!==p.id).map(x=>choice(x.name,x.id,S.pick===x.id)).join("")}</div>` +
+    `<div class="mt24">${btn("この人に入れる","vote",{disabled:S.pick===null})}</div>`;
+}
+
+function vVoteResult(){
+  const v = S.voteInfo;
+  const ex = v.executed!==null ? S.players.find(p=>p.id===v.executed) : null;
+  const list = S.players.filter(p=>p.alive || (ex && p.id===ex.id));
+  return head("投票の結果",`${S.day}日目`) + `
+  <div class="stack mb24">
+    ${list.map(p=>`<div class="row"><span class="grow">${esc(p.name)}</span><span style="color:var(--lamp)">${v.tally[p.id]||0} 票</span></div>`).join("")}
+  </div>
+  <div class="box center mb24">
+    ${ex ? `
+      <div class="big">${esc(ex.name)}</div>
+      <div class="sub" style="margin-top:8px">処刑されました${v.tied?"（同数のためくじ引き）":""}</div>
+      ${S.rules.revealExecuted?`<div class="big" style="margin-top:16px;font-size:34px;color:${ROLES[ex.role].accent}">${ROLES[ex.role].name}</div>`:""}`
+     : `<div style="font-family:var(--mincho);font-size:18px">同数のため、今日は誰も処刑されません</div>`}
+  </div>
+  ${btn(S.winner?"結果を見る":"夜になる","afterVote")}`;
+}
+
+function vNight(){
+  const a = alive(), p = a[S.cursor];
+  if(S.stage==="handoff") return handoff(p.name,"全員に順番に回ります。何もない人にも回してください","ready");
+  if(S.stage==="seerResult") return seerResultView("nightSeerDone");
+
+  if(p.role==="wolf"){
+    const mate = S.night.wolf!==null ? S.players.find(x=>x.id===S.night.wolf) : null;
+    return head("誰を襲う？", mate?`仲間の選択：${esc(mate.name)}（変更できます）`:null) +
+      `<div class="stack">${a.filter(x=>x.role!=="wolf").map(x=>choice(x.name,x.id,S.pick===x.id,ROLES.wolf.accent)).join("")}</div>` +
+      `<div class="mt24">${btn("襲う","actWolf",{tone:"blood",disabled:S.pick===null})}</div>`;
+  }
+
+  if(p.role==="knight"){
+    const ts = a.filter(x=>x.id!==p.id && !(S.rules.noRepeatGuard && x.id===S.lastGuard));
+    const sub = (S.rules.noRepeatGuard && S.lastGuard!==null) ? "昨夜と同じ人は守れません" : "自分は守れません";
+    if(!ts.length) return head("誰を守る？",sub) +
+      `<div class="box center">守れる相手がいません</div><div class="mt24">${btn("次の人へ","actNone")}</div>`;
+    return head("誰を守る？",sub) +
+      `<div class="stack">${ts.map(x=>choice(x.name,x.id,S.pick===x.id,ROLES.knight.accent)).join("")}</div>` +
+      `<div class="mt24">${btn("守る","actKnight",{disabled:S.pick===null})}</div>`;
+  }
+
+  if(p.role==="seer"){
+    const seen = S.seerLog.map(s=>s.name);
+    return head("誰を占う？","自分は占えません") +
+      `<div class="stack">${a.filter(x=>x.id!==p.id)
+        .map(x=>choice(x.name,x.id,S.pick===x.id,ROLES.seer.accent, seen.includes(x.name)?"占い済み":null)).join("")}</div>` +
+      `<div class="mt24">${btn("占う","actSeer",{disabled:S.pick===null})}</div>`;
+  }
+
+  return head("夜") + `
+    <div class="hold" style="touch-action:auto">
+      <div style="width:100%">
+        <div class="big" style="color:var(--lampDim);font-size:40px">静</div>
+        <div class="sub" style="margin-top:16px">今夜、あなたにできることはありません。<br>しばらく画面を見てから次の人へ渡してください。</div>
+      </div>
+    </div>
+    <div class="mt24">${btn("次の人へ","actNone")}</div>`;
+}
+
+function vMorning(){
+  const v = S.morningInfo.victim!==null ? S.players.find(p=>p.id===S.morningInfo.victim) : null;
+  return head("朝",`${S.day}日目`) + `
+  <div class="box center mb24" style="padding:36px 28px">
+    ${v ? `<div class="big">${esc(v.name)}</div><div class="sub" style="margin-top:12px">無残な姿で発見されました</div>`
+        : `<div style="font-family:var(--mincho);font-size:20px;color:var(--moss)">今朝は、誰も襲われませんでした</div>`}
+  </div>
+  ${btn(S.winner?"結果を見る":`${S.day}日目の話し合いへ`,"morningNext")}`;
+}
+
+function vOver(){
+  const win = S.winner==="village";
+  return `
+  <div class="center" style="padding:32px 0">
+    <div class="big" style="color:${win?"var(--lamp)":"var(--blood)"}">${win?"村人陣営の勝ち":"人狼陣営の勝ち"}</div>
+    <div class="sub" style="margin-top:12px">${win?"人狼はすべて処刑されました":"生き残った人狼が村を数で上回りました"}</div>
+  </div>
+  ${head("全員の役")}
+  <div class="stack mb32">
+    ${S.players.map(p=>`
+      <div class="row">
+        <span class="mark" style="background:${ROLES[p.role].accent}">${ROLES[p.role].mark}</span>
+        <div class="grow">
+          <div class="${p.alive?"":"dead"}">${esc(p.name)}</div>
+          <div class="sub" style="margin-top:2px">${ROLES[p.role].name} ・ ${p.fate||"生存"}</div>
+        </div>
+      </div>`).join("")}
+  </div>
+  ${head("記録")}
+  <div class="mb32">${S.log.map(l=>`<div class="logline">${esc(l)}</div>`).join("")}</div>
+  <div class="stack">
+    ${btn("同じ設定でもう一度","start")}
+    ${btn("設定を変える","toSetup",{tone:"ghost"})}
+  </div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  操作                                                                */
+/* ------------------------------------------------------------------ */
+const ACT = {
+  count(v){ S.count=+v; S.comp={...PRESETS[+v]}; S.names=Array.from({length:+v},(_,i)=>S.names[i]||""); },
+  comp(v){ const [k,d]=v.split(":"); S.comp[k]=Math.max(0,S.comp[k]+(+d)); },
+  rule(k){ S.rules[k]=!S.rules[k]; },
+  tie(){ S.rules.tie = S.rules.tie==="random" ? "none" : "random"; },
+  talk(d){ S.rules.talkSec=Math.max(60,S.rules.talkSec+(+d)); },
+
+  start(){
+    const bag=[]; KEYS.forEach(k=>{for(let i=0;i<S.comp[k];i++)bag.push(k);});
+    const roles=shuffle(bag);
+    S.players=Array.from({length:S.count},(_,i)=>({
+      id:i, name:(S.names[i]||"").trim()||`プレイヤー${i+1}`, role:roles[i], alive:true, fate:null}));
+    Object.assign(S,{day:0,log:[],seerLog:[],lastGuard:null,winner:null,cursor:0,
+      stage:"handoff",pick:null,phase:"reveal",night:{wolf:null,guard:null,seer:null},seerOut:null});
+  },
+  toSetup(){ S.phase="setup"; },
+
+  ready(){ S.stage = S.phase==="reveal" ? "role" : (S.phase==="vote" ? "vote" : "act"); },
+  pick(v){ S.pick=+v; },
+
+  roleDone(){
+    const p=S.players[S.cursor];
+    if(p.role==="seer" && S.rules.firstSeer){ S.stage="seerPick"; S.pick=null; }
+    else ACT.revealNext();
+  },
+  divine(){
+    const t=S.players.find(x=>x.id===S.pick);
+    const res = t.role==="wolf" ? "人狼" : "人間";
+    S.seerOut={name:t.name,res}; S.seerLog.push({day:0,name:t.name,res}); S.stage="seerResult";
+  },
+  revealNext(){
+    if(S.cursor+1 < S.players.length){ S.cursor++; S.stage="handoff"; S.pick=null; S.seerOut=null; }
+    else { S.day=1; S.left=S.rules.talkSec; S.running=false; S.phase="day"; S.cursor=0; S.stage="handoff"; S.pick=null; S.seerOut=null; }
+  },
+
+  timer(){ S.running=!S.running; },
+  plus60(){ S.left+=60; },
+  toVote(){ S.running=false; S.votes={}; S.cursor=0; S.stage="handoff"; S.pick=null; S.phase="vote"; },
+
+  vote(){
+    const a=alive(), p=a[S.cursor];
+    S.votes[p.id]=S.pick;
+    if(S.cursor+1 < a.length){ S.cursor++; S.stage="handoff"; S.pick=null; }
+    else ACT._tally();
+  },
+  _tally(){
+    const a=alive(), tally={};
+    a.forEach(p=>tally[p.id]=0);
+    Object.values(S.votes).forEach(t=>tally[t]=(tally[t]||0)+1);
+    const max=Math.max(...Object.values(tally));
+    const top=Object.keys(tally).filter(k=>tally[k]===max).map(Number);
+    const tied=top.length>1;
+    let executed=null;
+    if(!tied) executed=top[0];
+    else if(S.rules.tie==="random") executed=top[Math.floor(Math.random()*top.length)];
+
+    if(executed!==null){
+      const ex=S.players.find(p=>p.id===executed);
+      ex.alive=false; ex.fate=`${S.day}日目・処刑`;
+      addLog(`${S.day}日目 処刑：${ex.name}${S.rules.revealExecuted?`（${ROLES[ex.role].name}）`:""}`);
+    } else addLog(`${S.day}日目 同数のため処刑なし`);
+
+    S.voteInfo={tally,executed,tied};
+    S.winner=checkWin(S.players);
+    S.phase="voteResult";
+  },
+  afterVote(){
+    if(S.winner) return void(S.phase="over");
+    S.night={wolf:null,guard:null,seer:null};
+    S.cursor=0; S.stage="handoff"; S.pick=null; S.seerOut=null; S.phase="night";
+  },
+
+  actWolf(){ S.night.wolf=S.pick; ACT._nightNext(); },
+  actKnight(){ S.night.guard=S.pick; ACT._nightNext(); },
+  actSeer(){
+    const t=S.players.find(x=>x.id===S.pick);
+    const res=t.role==="wolf"?"人狼":"人間";
+    S.seerOut={name:t.name,res}; S.seerLog.push({day:S.day,name:t.name,res}); S.stage="seerResult";
+  },
+  nightSeerDone(){ S.night.seer=S.pick; ACT._nightNext(); },
+  actNone(){ ACT._nightNext(); },
+  _nightNext(){
+    const a=alive();
+    if(S.cursor+1 < a.length){ S.cursor++; S.stage="handoff"; S.pick=null; S.seerOut=null; }
+    else ACT._resolveNight();
+  },
+  _resolveNight(){
+    S.lastGuard=S.night.guard;
+    let victim=null;
+    if(S.night.wolf!==null && S.night.wolf!==S.night.guard) victim=S.night.wolf;
+    if(victim!==null){
+      const v=S.players.find(p=>p.id===victim);
+      v.alive=false; v.fate=`${S.day}日目の夜・襲撃`;
+      addLog(`${S.day}日目の夜 襲撃：${v.name}`);
+    } else addLog(`${S.day}日目の夜 襲撃は防がれた`);
+    S.morningInfo={victim};
+    S.day++;
+    S.winner=checkWin(S.players);
+    S.phase="morning";
+  },
+  morningNext(){
+    if(S.winner) S.phase="over";
+    else { S.phase="day"; S.left=S.rules.talkSec; S.running=false; }
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/*  描画とイベント                                                      */
+/* ------------------------------------------------------------------ */
+const app = document.getElementById("app");
+function render(){
+  app.innerHTML = view();
+  bindHold();
+  save();
+  window.scrollTo(0,0);
+}
+
+function bindHold(){
+  app.querySelectorAll(".hold").forEach(el=>{
+    if(!el.querySelector(".face")) return;
+    const on = e=>{ e.preventDefault(); el.classList.add("held"); };
+    const off= ()=> el.classList.remove("held");
+    el.addEventListener("pointerdown",on);
+    el.addEventListener("pointerup",off);
+    el.addEventListener("pointerleave",off);
+    el.addEventListener("pointercancel",off);
+  });
+}
+
+app.addEventListener("click", e=>{
+  const t = e.target.closest("[data-act]");
+  if(!t) return;
+  const fn = ACT[t.dataset.act];
+  if(!fn) return;
+  fn(t.dataset.arg);
+  render();
+});
+
+// 名前入力は再描画するとフォーカスが飛ぶので、状態だけ更新する
+app.addEventListener("input", e=>{
+  const i = e.target.dataset.name;
+  if(i===undefined) return;
+  S.names[+i] = e.target.value;
+  save();
+});
+
+// 昼のタイマー
+setInterval(()=>{
+  if(S.phase!=="day" || !S.running || S.left<=0) return;
+  S.left--;
+  const c=document.getElementById("clock");
+  if(c){
+    c.textContent = String(Math.floor(S.left/60)).padStart(2,"0")+":"+String(S.left%60).padStart(2,"0");
+    c.style.color = S.left<=30 ? "var(--blood)" : "var(--paper)";
+  }
+  if(S.left<=0){ S.running=false; render(); }
+}, 1000);
+
+// 進行中に画面が消えないように（対応端末のみ）
+let wl=null;
+async function keepAwake(){
+  try{
+    if("wakeLock" in navigator && !wl) wl = await navigator.wakeLock.request("screen");
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="visible"){ wl=null; keepAwake(); } });
+document.addEventListener("click", keepAwake, {once:true});
+
+// 二本指ズーム・ダブルタップ拡大の抑止
+document.addEventListener("gesturestart", e=>e.preventDefault());
+let lastTap=0;
+document.addEventListener("touchend", e=>{
+  const now=Date.now();
+  if(now-lastTap<300) e.preventDefault();
+  lastTap=now;
+}, {passive:false});
+
+if("serviceWorker" in navigator)
+  window.addEventListener("load", ()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+
+load();
+render();
+</script>
+</body>
+</html>
