@@ -120,11 +120,20 @@ const ROLES = {
   seer:     {name:"預言者",   mark:"占", accent:"#a98fd0",
              line:"毎晩ひとりを占い、人狼かどうかを知る。",
              win:"人狼を全員処刑すれば勝ち。"},
+  insider:  {name:"内通者",   mark:"通", accent:"#8a6ea8",
+             line:"初日に人狼が誰かを知る。夜にできることはない。占われても「人間」と出る。",
+             win:"人狼が勝てばあなたの勝ち。"},
+  god:      {name:"神",       mark:"神", accent:"#cfc7b2",
+             line:"村にも人狼にも属さない。占われたその夜に死ぬ。襲撃されても死ぬ。",
+             win:"村か人狼の決着がついたとき、生きていればあなたひとりの勝ち。"},
+  dictator: {name:"独裁者",   mark:"独", accent:"#c98a4b",
+             line:"ゲーム中に一度だけ、話し合いを打ち切って好きな相手を処刑できる。その日は投票を行わない。",
+             win:"人狼を全員処刑すれば勝ち。"},
   villager: {name:"村人",     mark:"村", accent:"#e8c27a",
              line:"力はない。話と投票だけが武器。",
              win:"人狼を全員処刑すれば勝ち。"},
 };
-const KEYS = ["wolf","traitor","knight","seer","villager"];
+const KEYS = ["wolf","traitor","insider","knight","seer","dictator","god","villager"];
 const PRESETS = {
   4:{wolf:1,traitor:0,knight:1,seer:1,villager:1},
   5:{wolf:1,traitor:1,knight:1,seer:1,villager:1},
@@ -132,6 +141,7 @@ const PRESETS = {
   7:{wolf:2,traitor:1,knight:1,seer:1,villager:2},
   8:{wolf:2,traitor:1,knight:1,seer:1,villager:3},
 };
+Object.values(PRESETS).forEach(p=>KEYS.forEach(k=>{ if(p[k]===undefined) p[k]=0; }));
 
 const esc = s => String(s).replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -147,7 +157,7 @@ const fresh = () => ({
   rules:{firstSeer:true, noRepeatGuard:true, revealExecuted:false, tie:"random", talkSec:180},
   players:[], day:0, log:[], cursor:0, stage:"handoff", pick:null,
   night:{wolf:null, guard:null, seer:null}, seerOut:null, seerLog:[],
-  lastGuard:null, votes:{}, voteInfo:null, morningInfo:null, winner:null,
+  lastGuard:null, votes:{}, voteInfo:null, morningInfo:null, winner:null, dictatorUsed:false,
   left:180, running:false,
 });
 let S = fresh();
@@ -167,9 +177,11 @@ const addLog = t => S.log.push(t);
 const checkWin = ps => {
   const a = ps.filter(p=>p.alive);
   const w = a.filter(p=>p.role==="wolf").length;
-  if(w===0) return "village";
-  if(w >= a.length - w) return "wolf";
-  return null;
+  let r = null;
+  if(w===0) r = "village";
+  else if(w >= a.length - w) r = "wolf";
+  if(r && a.some(p=>p.role==="god")) return "god";   // 決着時に神が生存 → 神の単独勝ち
+  return r;
 };
 
 /* ------------------------------------------------------------------ */
@@ -205,6 +217,7 @@ function view(){
   if(P==="setup")      return vSetup();
   if(P==="reveal")     return vReveal();
   if(P==="day")        return vDay();
+  if(P==="dictator")   return vDictator();
   if(P==="vote")       return vVote();
   if(P==="voteResult") return vVoteResult();
   if(P==="night")      return vNight();
@@ -242,8 +255,8 @@ function vSetup(){
       </div>`).join("")}
   </div>
   <div class="sub mb32" style="margin-top:8px">
-    人狼陣営 ${S.comp.wolf+S.comp.traitor} ／ 村人陣営 ${S.comp.knight+S.comp.seer+S.comp.villager}
-    （裏切り者は人数計算では村側に数えます）
+    人狼陣営 ${S.comp.wolf+S.comp.traitor+S.comp.insider} ／ 村人陣営 ${S.comp.knight+S.comp.seer+S.comp.dictator+S.comp.villager}${S.comp.god?` ／ 第三陣営 ${S.comp.god}`:""}
+    （裏切り者・内通者・神は、人狼の勝利判定では村側の人数に数えます）
   </div>
 
   ${head("名前")}
@@ -281,12 +294,14 @@ function vReveal(){
   if(S.stage==="handoff") return handoff(p.name,"ほかの人に見えない向きで持ってください","ready");
 
   if(S.stage==="role"){
-    const mates = p.role==="wolf" ? S.players.filter(x=>x.id!==p.id && x.role==="wolf") : [];
+    const knows = p.role==="wolf" || p.role==="insider";
+    const mates = knows ? S.players.filter(x=>x.id!==p.id && x.role==="wolf") : [];
+    const mlabel = p.role==="wolf" ? "仲間の人狼" : "人狼";
     return head("あなたの役",`${S.cursor+1} / ${S.players.length} 人目`) + holdCard(`
       <div class="big" style="color:${r.accent}">${r.name}</div>
       <div style="margin-top:20px;font-size:14px;line-height:1.7">${r.line}</div>
       <div class="sub" style="margin-top:10px">${r.win}</div>
-      ${mates.length?`<div style="margin-top:16px;font-size:14px;color:var(--blood)">仲間の人狼：${mates.map(m=>esc(m.name)).join("、")}</div>`:""}
+      ${mates.length?`<div style="margin-top:16px;font-size:14px;color:var(--blood)">${mlabel}：${mates.map(m=>esc(m.name)).join("、")}</div>`:""}
     `) + `<div class="mt24">${btn("覚えた","roleDone")}</div>`;
   }
 
@@ -323,7 +338,16 @@ function vDay(){
   ${head("生存者",`${alive().length}人`)}
   <div class="mb32">${alive().map(p=>`<span class="tag">${esc(p.name)}</span>`).join("")}</div>
   ${S.log.length?head("これまで")+`<div class="mb32">${S.log.map(l=>`<div class="logline">${esc(l)}</div>`).join("")}</div>`:""}
-  ${btn("投票に進む","toVote")}`;
+  ${btn("投票に進む","toVote")}
+  ${(S.comp.dictator>0 && !S.dictatorUsed && alive().length>2)
+    ? `<div style="margin-top:8px">${btn("独裁者の権利を使う","toDictator",{tone:"ghost"})}</div>` : ""}`;
+}
+
+function vDictator(){
+  return head("独裁者による処刑","独裁者本人が操作してください。話し合いは打ち切られ、今日の投票は行いません") +
+    `<div class="stack">${alive().map(x=>choice(x.name,x.id,S.pick===x.id,ROLES.dictator.accent)).join("")}</div>` +
+    `<div class="mt24">${btn("この人を処刑する","dictate",{disabled:S.pick===null})}</div>` +
+    `<div style="margin-top:8px">${btn("やめる","cancelDictator",{tone:"ghost"})}</div>`;
 }
 
 function vVote(){
@@ -338,14 +362,14 @@ function vVoteResult(){
   const v = S.voteInfo;
   const ex = v.executed!==null ? S.players.find(p=>p.id===v.executed) : null;
   const list = S.players.filter(p=>p.alive || (ex && p.id===ex.id));
-  return head("投票の結果",`${S.day}日目`) + `
-  <div class="stack mb24">
+  return head(v.byDictator?"独裁者の裁定":"投票の結果",`${S.day}日目`) + `
+  ${v.byDictator ? "" : `<div class="stack mb24">
     ${list.map(p=>`<div class="row"><span class="grow">${esc(p.name)}</span><span style="color:var(--lamp)">${v.tally[p.id]||0} 票</span></div>`).join("")}
-  </div>
+  </div>`}
   <div class="box center mb24">
     ${ex ? `
       <div class="big">${esc(ex.name)}</div>
-      <div class="sub" style="margin-top:8px">処刑されました${v.tied?"（同数のためくじ引き）":""}</div>
+      <div class="sub" style="margin-top:8px">${v.byDictator?"独裁者の指名により処刑されました":`処刑されました${v.tied?"（同数のためくじ引き）":""}`}</div>
       ${S.rules.revealExecuted?`<div class="big" style="margin-top:16px;font-size:34px;color:${ROLES[ex.role].accent}">${ROLES[ex.role].name}</div>`:""}`
      : `<div style="font-family:var(--mincho);font-size:18px">同数のため、今日は誰も処刑されません</div>`}
   </div>
@@ -393,21 +417,25 @@ function vNight(){
 }
 
 function vMorning(){
-  const v = S.morningInfo.victim!==null ? S.players.find(p=>p.id===S.morningInfo.victim) : null;
+  const vs = (S.morningInfo.victims||[]).map(id=>S.players.find(p=>p.id===id));
   return head("朝",`${S.day}日目`) + `
   <div class="box center mb24" style="padding:36px 28px">
-    ${v ? `<div class="big">${esc(v.name)}</div><div class="sub" style="margin-top:12px">無残な姿で発見されました</div>`
-        : `<div style="font-family:var(--mincho);font-size:20px;color:var(--moss)">今朝は、誰も襲われませんでした</div>`}
+    ${vs.length ? `<div class="big">${vs.map(v=>esc(v.name)).join("<br>")}</div><div class="sub" style="margin-top:12px">無残な姿で発見されました</div>`
+        : `<div style="font-family:var(--mincho);font-size:20px;color:var(--moss)">今朝は、誰も死んでいませんでした</div>`}
   </div>
   ${btn(S.winner?"結果を見る":`${S.day}日目の話し合いへ`,"morningNext")}`;
 }
 
 function vOver(){
-  const win = S.winner==="village";
+  const W = {
+    village:{t:"村人陣営の勝ち", c:"var(--lamp)",  s:"人狼はすべて処刑されました"},
+    wolf:   {t:"人狼陣営の勝ち", c:"var(--blood)", s:"生き残った人狼が村を数で上回りました"},
+    god:    {t:"神の勝ち",       c:"#cfc7b2",      s:"決着の時、神は生きていました。村も人狼も敗北です"},
+  }[S.winner] || {t:"",c:"var(--paper)",s:""};
   return `
   <div class="center" style="padding:32px 0">
-    <div class="big" style="color:${win?"var(--lamp)":"var(--blood)"}">${win?"村人陣営の勝ち":"人狼陣営の勝ち"}</div>
-    <div class="sub" style="margin-top:12px">${win?"人狼はすべて処刑されました":"生き残った人狼が村を数で上回りました"}</div>
+    <div class="big" style="color:${W.c}">${W.t}</div>
+    <div class="sub" style="margin-top:12px">${W.s}</div>
   </div>
   ${head("全員の役")}
   <div class="stack mb32">
@@ -443,7 +471,7 @@ const ACT = {
     const roles=shuffle(bag);
     S.players=Array.from({length:S.count},(_,i)=>({
       id:i, name:(S.names[i]||"").trim()||`プレイヤー${i+1}`, role:roles[i], alive:true, fate:null}));
-    Object.assign(S,{day:0,log:[],seerLog:[],lastGuard:null,winner:null,cursor:0,
+    Object.assign(S,{day:0,log:[],seerLog:[],lastGuard:null,winner:null,cursor:0,dictatorUsed:false,
       stage:"handoff",pick:null,phase:"reveal",night:{wolf:null,guard:null,seer:null},seerOut:null});
   },
   toSetup(){ S.phase="setup"; },
@@ -468,6 +496,17 @@ const ACT = {
 
   timer(){ S.running=!S.running; },
   plus60(){ S.left+=60; },
+  toDictator(){ S.running=false; S.pick=null; S.phase="dictator"; },
+  cancelDictator(){ S.pick=null; S.phase="day"; },
+  dictate(){
+    const t=S.players.find(p=>p.id===S.pick);
+    t.alive=false; t.fate=`${S.day}日目・独裁者による処刑`;
+    addLog(`${S.day}日目 独裁者が${t.name}を処刑${S.rules.revealExecuted?`（${ROLES[t.role].name}）`:""}`);
+    S.dictatorUsed=true;
+    S.voteInfo={tally:{}, executed:t.id, tied:false, byDictator:true};
+    S.winner=checkWin(S.players);
+    S.phase="voteResult";
+  },
   toVote(){ S.running=false; S.votes={}; S.cursor=0; S.stage="handoff"; S.pick=null; S.phase="vote"; },
 
   vote(){
@@ -519,14 +558,17 @@ const ACT = {
   },
   _resolveNight(){
     S.lastGuard=S.night.guard;
-    let victim=null;
-    if(S.night.wolf!==null && S.night.wolf!==S.night.guard) victim=S.night.wolf;
-    if(victim!==null){
-      const v=S.players.find(p=>p.id===victim);
-      v.alive=false; v.fate=`${S.day}日目の夜・襲撃`;
-      addLog(`${S.day}日目の夜 襲撃：${v.name}`);
-    } else addLog(`${S.day}日目の夜 襲撃は防がれた`);
-    S.morningInfo={victim};
+    const dead=[];
+    if(S.night.wolf!==null && S.night.wolf!==S.night.guard) dead.push({id:S.night.wolf, how:"襲撃"});
+    if(S.night.seer!==null){
+      const t=S.players.find(p=>p.id===S.night.seer);
+      if(t && t.role==="god" && !dead.some(d=>d.id===t.id)) dead.push({id:t.id, how:"占い"});
+    }
+    dead.forEach(d=>{ const v=S.players.find(p=>p.id===d.id);
+      v.alive=false; v.fate=`${S.day}日目の夜・${d.how}`; });
+    if(dead.length) addLog(`${S.day}日目の夜 死亡：${dead.map(d=>S.players.find(p=>p.id===d.id).name).join("、")}`);
+    else addLog(`${S.day}日目の夜 誰も死ななかった`);
+    S.morningInfo={victims:dead.map(d=>d.id)};
     S.day++;
     S.winner=checkWin(S.players);
     S.phase="morning";
