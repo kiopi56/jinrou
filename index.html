@@ -585,11 +585,15 @@ const ACT = {
 /*  描画とイベント                                                      */
 /* ------------------------------------------------------------------ */
 const app = document.getElementById("app");
+let lastScreen = "";
 function render(){
+  const key = `${S.phase}|${S.stage}|${S.cursor}`;
   app.innerHTML = view();
   bindHold();
   save();
-  window.scrollTo(0,0);
+  // 画面そのものが切り替わったときだけ先頭へ。
+  // 設定の±やルール切替では位置を保つ。
+  if(key !== lastScreen){ window.scrollTo(0,0); lastScreen = key; }
 }
 
 function bindHold(){
